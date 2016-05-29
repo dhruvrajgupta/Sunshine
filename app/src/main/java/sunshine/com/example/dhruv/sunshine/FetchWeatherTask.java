@@ -29,45 +29,17 @@ import java.util.Vector;
 import sunshine.com.example.dhruv.sunshine.data.WeatherContract.WeatherEntry;
 import sunshine.com.example.dhruv.sunshine.data.WeatherContract.LocationEntry;
 
-public class FetchWeatherTask extends AsyncTask<String,Void,String[]>{
+public class FetchWeatherTask extends AsyncTask<String,Void,Void>{
 
     private final String LOG_TAG = FetchWeatherTask.class.getSimpleName();
 
-    private final ArrayAdapter<String> mForecastAdapter;
     private final Context mContext;
 
-    public FetchWeatherTask(Context context,ArrayAdapter<String> forecastAdapter){
+    public FetchWeatherTask(Context context){
         mContext = context;
-        mForecastAdapter = forecastAdapter;
     }
 
     private boolean DEBUG = true;
-
-    private String getReadableDateString(long time){
-        Date date = new Date();
-        SimpleDateFormat format = new SimpleDateFormat("E, MMM d");
-        return format.format(date).toString();
-    }
-
-    private String formatHighLows(double high, double low){
-        SharedPreferences sharedPrefs = PreferenceManager.getDefaultSharedPreferences(mContext);
-        String unitType = sharedPrefs.getString(
-                mContext.getString(R.string.pref_units_key),
-                mContext.getString(R.string.pref_units_metric));
-
-        if(unitType.equals(mContext.getString(R.string.pref_units_imperial))){
-            high = (high*1.8)+32;
-            low = (low*1.8)+32;
-        }else if(!unitType.equals(mContext.getString(R.string.pref_units_metric))){
-            Log.d(LOG_TAG,"Unit type not found : "+unitType);
-        }
-
-        long roundedHigh = Math.round(high);
-        long roundedLow = Math.round(low);
-
-        String highLowStr = roundedHigh + "/" + roundedLow;
-        return highLowStr;
-    }
 
     public long addLocation(String locationSetting, String cityName, double lat,double lon){
 
@@ -104,22 +76,7 @@ public class FetchWeatherTask extends AsyncTask<String,Void,String[]>{
         return locationId;
     }
 
-    String[] convertContentValuesToUXFormat(Vector<ContentValues> cvv){
-        String[] resultStrs = new String[cvv.size()];
-        for(int i=0; i<cvv.size(); i++){
-            ContentValues weatherValues = cvv.elementAt(i);
-            String highAndLow = formatHighLows(
-                    weatherValues.getAsDouble(WeatherEntry.COLUMN_MAX_TEMP),
-                    weatherValues.getAsDouble(WeatherEntry.COLUMN_MIN_TEMP));
-            resultStrs[i] = getReadableDateString(
-                    weatherValues.getAsLong(WeatherEntry.COLUMN_DATE))+
-                    " - "+weatherValues.getAsString(WeatherEntry.COLUMN_SHORT_DESC)+
-                    " - "+highAndLow;
-        }
-        return resultStrs;
-    }
-
-    private String[] getWeatherDataFromJson(String forecastJsonStr,
+    private void getWeatherDataFromJson(String forecastJsonStr,
                                             String locationSetting)
             throws JSONException {
 
@@ -242,47 +199,25 @@ public class FetchWeatherTask extends AsyncTask<String,Void,String[]>{
                 cVVector.add(weatherValues);
             }
 
+            int inserted=0;
             // add to database
             if ( cVVector.size() > 0 ) {
                 // Student: call bulkInsert to add the weatherEntries to the database here
                 ContentValues[] cvArray = new ContentValues[cVVector.size()];
                 cVVector.toArray(cvArray);
-                mContext.getContentResolver().bulkInsert(WeatherEntry.CONTENT_URI,cvArray);
+                inserted = mContext.getContentResolver().bulkInsert(WeatherEntry.CONTENT_URI,cvArray);
             }
 
-            // Sort order:  Ascending, by date.
-            String sortOrder = WeatherEntry.COLUMN_DATE + " ASC";
-            Uri weatherForLocationUri = WeatherEntry.buildWeatherLocationWithStartDate(
-                    locationSetting, System.currentTimeMillis());
-
-            // Students: Uncomment the next lines to display what what you stored in the bulkInsert
-
-//            Cursor cur = mContext.getContentResolver().query(weatherForLocationUri,
-//                    null, null, null, sortOrder);z
-//
-//            cVVector = new Vector<ContentValues>(cur.getCount());
-//            if ( cur.moveToFirst() ) {
-//                do {
-//                    ContentValues cv = new ContentValues();
-//                    DatabaseUtils.cursorRowToContentValues(cur, cv);
-//                    cVVector.add(cv);
-//                } while (cur.moveToNext());
-//            }
-
-            Log.d(LOG_TAG, "FetchWeatherTask Complete. " + cVVector.size() + " Inserted");
-
-            String[] resultStrs = convertContentValuesToUXFormat(cVVector);
-            return resultStrs;
+            Log.d(LOG_TAG,"FetchWeatherTaskComplete. "+inserted+" Inserted");
 
         } catch (JSONException e) {
             Log.e(LOG_TAG, e.getMessage(), e);
             e.printStackTrace();
         }
-        return null;
     }
 
     @Override
-    protected String[] doInBackground(String... params) {
+    protected Void doInBackground(String... params) {
 
         if(params.length==0){
             return null;
@@ -352,11 +287,15 @@ public class FetchWeatherTask extends AsyncTask<String,Void,String[]>{
             }
             forecastJsonStr = buffer.toString();
             Log.d("Internet Data",forecastJsonStr);
+            getWeatherDataFromJson(forecastJsonStr,locationQuery);
         } catch (IOException e) {
             Log.e(LOG_TAG, "Error ", e);
             // If the code didn't successfully get the weather data, there's no point in attemping
             // to parse it.
             return null;
+        } catch (JSONException e) {
+            Log.e(LOG_TAG,e.getMessage());
+            e.printStackTrace();
         } finally {
             if (urlConnection != null) {
                 urlConnection.disconnect();
@@ -369,24 +308,6 @@ public class FetchWeatherTask extends AsyncTask<String,Void,String[]>{
                 }
             }
         }
-
-        try {
-            return getWeatherDataFromJson(forecastJsonStr, locationQuery);
-        } catch (JSONException e) {
-            Log.e(LOG_TAG, e.getMessage(), e);
-            e.printStackTrace();
-        }
-        // This will only happen if there was an error getting or parsing the forecast.
         return null;
-    }
-
-    @Override
-    protected void onPostExecute(String[] result) {
-        if(result!=null && mForecastAdapter!=null){
-            mForecastAdapter.clear();
-            for (String dayForecastStr : result){
-                mForecastAdapter.add(dayForecastStr);
-            }
-        }
     }
 }
