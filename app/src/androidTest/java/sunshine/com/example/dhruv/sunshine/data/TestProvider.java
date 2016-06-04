@@ -237,7 +237,7 @@ public class TestProvider extends AndroidTestCase {
 //
 //        // Has the NotificationUri been set correctly? --- we can only test this easily against API
 //        // level 19 or greater because getNotificationUri was added in API level 19.
-//        if ( Build.VERSION.SDK_INT >= 19 ) {
+//        if ( BuildInfos.VERSION.SDK_INT >= 19 ) {
 //            assertEquals("Error: Location Query did not properly set NotificationUri",
 //                    locationCursor.getNotificationUri(), LocationEntry.CONTENT_URI);
 //        }
